@@ -1,7 +1,8 @@
 FROM node:18-slim
 
-# Install dependencies required by Puppeteer/Chromium on Linux
+# Install Chromium and all required dependencies
 RUN apt-get update && apt-get install -y \
+    chromium \
     ca-certificates \
     fonts-liberation \
     libasound2 \
@@ -39,6 +40,10 @@ RUN apt-get update && apt-get install -y \
     wget \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Tell Puppeteer to skip downloading Chrome (we use system Chromium instead)
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
