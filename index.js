@@ -90,9 +90,18 @@ client.on('ready', () => {
     logActivity('WhatsApp Connected & Ready!');
 });
 
-client.on('disconnected', () => {
+client.on('disconnected', (reason) => {
     isConnected = false;
-    logActivity('WhatsApp Disconnected!');
+    currentQR = null;
+    logActivity(`⚠️ WhatsApp Disconnected: ${reason}. Restarting...`);
+    // Re-initialize after a short delay so a new QR is generated
+    setTimeout(() => client.initialize(), 5000);
+});
+
+client.on('auth_failure', (msg) => {
+    isConnected = false;
+    currentQR = null;
+    logActivity(`❌ Auth Failed: ${msg}. Please remove this device from WhatsApp and re-scan.`);
 });
 
 client.on('message', async (msg) => {
