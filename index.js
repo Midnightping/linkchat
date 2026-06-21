@@ -26,6 +26,30 @@ if (!fs.existsSync(configPath)) {
     fs.writeFileSync(configPath, JSON.stringify({ allowed_contacts: {} }));
 }
 
+// Clean up stale Chromium lock files left by previous crashed process
+// This prevents the "profile in use by another process" error on Railway restarts
+function cleanChromiumLocks(dir) {
+    try {
+        const lockFiles = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
+        const walk = (d) => {
+            if (!fs.existsSync(d)) return;
+            fs.readdirSync(d).forEach(f => {
+                const fullPath = path.join(d, f);
+                if (lockFiles.includes(f)) {
+                    fs.unlinkSync(fullPath);
+                    console.log(`🧹 Removed stale lock: ${fullPath}`);
+                } else if (fs.statSync(fullPath).isDirectory()) {
+                    walk(fullPath);
+                }
+            });
+        };
+        walk(dir);
+    } catch (e) {
+        console.log('Lock cleanup skipped:', e.message);
+    }
+}
+cleanChromiumLocks(dataDir);
+
 function getConfig() {
     return JSON.parse(fs.readFileSync(configPath, 'utf8'));
 }
