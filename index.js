@@ -1,5 +1,5 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const { generateReply } = require('./ai');
+const { generateReply, logActivity, getActivityLog } = require('./ai');
 const express = require('express');
 const qrcodeLib = require('qrcode');
 const cors = require('cors');
@@ -11,9 +11,10 @@ const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.text({ limit: '50mb' })); // To handle large .txt file uploads
 app.use(express.static('public'));
 
-// Data path setup (Mounted as a Railway Volume)
+// Data path setup
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir);
@@ -46,19 +47,19 @@ const client = new Client({
 });
 
 client.on('qr', async (qr) => {
-    console.log('\n--- QR CODE RECEIVED (Check Dashboard) ---');
     currentQR = await qrcodeLib.toDataURL(qr);
+    logActivity('QR Code generated. Waiting for scan...');
 });
 
 client.on('ready', () => {
-    console.log('\n✅ Client is ready! The AI Auto-Responder is now active.');
     isConnected = true;
     currentQR = null;
+    logActivity('WhatsApp Connected & Ready!');
 });
 
 client.on('disconnected', () => {
-    console.log('Client disconnected.');
     isConnected = false;
+    logActivity('WhatsApp Disconnected!');
 });
 
 client.on('message', async (msg) => {
@@ -66,22 +67,31 @@ client.on('message', async (msg) => {
     const config = getConfig();
     
     if (config.allowed_contacts && config.allowed_contacts[contactId]) {
-        console.log(`\n📩 Received message from ${config.allowed_contacts[contactId].name}: ${msg.body}`);
+        const contact = config.allowed_contacts[contactId];
+        logActivity(`📩 [${contact.name}] Msg: "${msg.body}"`);
         
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const replyText = await generateReply(contactId, config.allowed_contacts[contactId], msg.body);
+        // Realistic Human Reaction Delay: wait 2 to 8 seconds before "seeing" it
+        const reactionDelay = Math.floor(Math.random() * (8000 - 2000 + 1)) + 2000;
+        await new Promise(resolve => setTimeout(resolve, reactionDelay));
+        
+        const replyText = await generateReply(contactId, contact, msg.body);
         
         if (replyText) {
-            console.log(`🤖 AI generated reply: ${replyText}`);
+            logActivity(`🤖 [AI -> ${contact.name}] Drafted: "${replyText}"`);
             const chat = await msg.getChat();
+            
+            // Show "typing..."
             await chat.sendStateTyping();
             
-            const typingTime = Math.min(replyText.length * 50, 5000); 
-            await new Promise(resolve => setTimeout(resolve, typingTime));
+            // Realistic Human Typing Delay: ~60ms per character + some random hesitation
+            const typingDelay = (replyText.length * 60) + Math.floor(Math.random() * 1500); 
+            await new Promise(resolve => setTimeout(resolve, typingDelay));
             
             await chat.clearState();
             await client.sendMessage(contactId, replyText);
-            console.log('✅ Reply sent!');
+            logActivity(`✅ [Sent to ${contact.name}] "${replyText}"`);
+        } else {
+            logActivity(`⚠️ AI returned no reply for ${contact.name} (Silent drop)`);
         }
     }
 });
@@ -91,6 +101,10 @@ client.initialize();
 // API ROUTES FOR DASHBOARD
 app.get('/api/status', (req, res) => {
     res.json({ connected: isConnected, qr: currentQR });
+});
+
+app.get('/api/activity', (req, res) => {
+    res.json(getActivityLog());
 });
 
 app.get('/api/contacts', (req, res) => {
@@ -123,6 +137,25 @@ app.delete('/api/contacts/:id', (req, res) => {
     res.json({ success: true });
 });
 
+// Route for Data Sync feature
+app.post('/api/upload-history/:id', (req, res) => {
+    const id = req.params.id;
+    const historyText = req.body; // Received as raw text due to express.text()
+    
+    if (!historyText || typeof historyText !== 'string') {
+        return res.status(400).json({ error: "Invalid file data" });
+    }
+
+    try {
+        const historyPath = path.join(dataDir, `history_${id}.txt`);
+        fs.writeFileSync(historyPath, historyText);
+        logActivity(`📁 Synced chat history for target: ${id}`);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.listen(port, () => {
-    console.log(`\n🌍 Dashboard running at http://localhost:${port}`);
+    console.log(`\n🌍 Dashboard running at port ${port}`);
 });
