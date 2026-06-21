@@ -1,62 +1,128 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
-const fs = require('fs');
 const { generateReply } = require('./ai');
+const express = require('express');
+const qrcodeLib = require('qrcode');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
-// Load config
-const config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+// Data path setup (Mounted as a Railway Volume)
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir);
+}
+const configPath = path.join(dataDir, 'config.json');
+
+// Initialize config if it doesn't exist
+if (!fs.existsSync(configPath)) {
+    fs.writeFileSync(configPath, JSON.stringify({ allowed_contacts: {} }));
+}
+
+function getConfig() {
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+}
+
+function saveConfig(config) {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+// WhatsApp Client Setup
+let currentQR = null;
+let isConnected = false;
 
 const client = new Client({
-    authStrategy: new LocalAuth(), // Saves session so you don't have to scan QR every time
+    authStrategy: new LocalAuth({ dataPath: dataDir }), // Saves session to /data folder
     puppeteer: {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
 
-client.on('qr', (qr) => {
-    // Generate and scan this code with your phone
-    console.log('\n--- QR CODE RECEIVED ---');
-    console.log('Scan the QR code below with your WhatsApp (Linked Devices):');
-    qrcode.generate(qr, { small: true });
+client.on('qr', async (qr) => {
+    console.log('\n--- QR CODE RECEIVED (Check Dashboard) ---');
+    currentQR = await qrcodeLib.toDataURL(qr);
 });
 
 client.on('ready', () => {
     console.log('\n✅ Client is ready! The AI Auto-Responder is now active.');
-    console.log('Waiting for messages from allowed contacts...');
+    isConnected = true;
+    currentQR = null;
+});
+
+client.on('disconnected', () => {
+    console.log('Client disconnected.');
+    isConnected = false;
 });
 
 client.on('message', async (msg) => {
-    const contactId = msg.from; // Usually in the format "number@c.us"
+    const contactId = msg.from; 
+    const config = getConfig();
     
-    // Check if we should reply to this person
-    if (config.allowed_contacts[contactId]) {
-        console.log(`\n📩 Received message from ${config.allowed_contacts[contactId].name} (${contactId}): ${msg.body}`);
+    if (config.allowed_contacts && config.allowed_contacts[contactId]) {
+        console.log(`\n📩 Received message from ${config.allowed_contacts[contactId].name}: ${msg.body}`);
         
-        // Optional: add a small delay to simulate reaction time
         await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Generate reply
         const replyText = await generateReply(contactId, config.allowed_contacts[contactId], msg.body);
         
         if (replyText) {
             console.log(`🤖 AI generated reply: ${replyText}`);
-            
-            // Simulate typing
             const chat = await msg.getChat();
             await chat.sendStateTyping();
             
-            // Wait a bit to simulate typing time based on length of response
-            const typingTime = Math.min(replyText.length * 50, 5000); // 50ms per character, max 5s
+            const typingTime = Math.min(replyText.length * 50, 5000); 
             await new Promise(resolve => setTimeout(resolve, typingTime));
             
             await chat.clearState();
             await client.sendMessage(contactId, replyText);
             console.log('✅ Reply sent!');
         }
-    } else {
-        // console.log(`Ignored message from ${contactId}`);
     }
 });
 
 client.initialize();
+
+// API ROUTES FOR DASHBOARD
+app.get('/api/status', (req, res) => {
+    res.json({ connected: isConnected, qr: currentQR });
+});
+
+app.get('/api/contacts', (req, res) => {
+    const config = getConfig();
+    res.json(config.allowed_contacts || {});
+});
+
+app.post('/api/contacts', (req, res) => {
+    const { id, name, relationship, goal } = req.body;
+    if (!id || !name || !goal) return res.status(400).json({ error: "Missing fields" });
+
+    const config = getConfig();
+    if(!config.allowed_contacts) config.allowed_contacts = {};
+    
+    config.allowed_contacts[id] = { name, relationship, goal };
+    saveConfig(config);
+    
+    res.json({ success: true });
+});
+
+app.delete('/api/contacts/:id', (req, res) => {
+    const id = req.params.id;
+    const config = getConfig();
+    
+    if (config.allowed_contacts && config.allowed_contacts[id]) {
+        delete config.allowed_contacts[id];
+        saveConfig(config);
+    }
+    
+    res.json({ success: true });
+});
+
+app.listen(port, () => {
+    console.log(`\n🌍 Dashboard running at http://localhost:${port}`);
+});

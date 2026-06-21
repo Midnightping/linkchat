@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Auto-Responder Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        h1, h2 {
+            margin-top: 0;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        .status-badge.connected {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .status-badge.disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        #qr-container img {
+            width: 100%;
+            max-width: 250px;
+            border-radius: 12px;
+            margin-top: 1rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
+            color: white;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .contact-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .contact-info h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.1rem;
+        }
+
+        .contact-info p {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .goal-text {
+            color: #cbd5e1 !important;
+            font-style: italic;
+        }
+
+        .delete-btn {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            width: auto;
+            padding: 0.5rem 1rem;
+        }
+        
+        .delete-btn:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1 style="margin-bottom: 2rem;">Auto-Reply Control Center</h1>
+    <div class="container">
+        <!-- Sidebar / Status -->
+        <div class="glass-panel">
+            <h2>System Status</h2>
+            <div id="status-badge" class="status-badge disconnected">Checking connection...</div>
+            
+            <div id="qr-container">
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Waiting for QR code to generate...</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="glass-panel">
+            <h2>Add Target Contact</h2>
+            <form id="add-contact-form">
+                <div class="form-group">
+                    <label>Phone Number (with country code, no +)</label>
+                    <input type="text" id="phone" placeholder="e.g. 233203585324" required>
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="name" placeholder="e.g. Steph" required>
+                </div>
+                <div class="form-group">
+                    <label>Relationship</label>
+                    <input type="text" id="relationship" placeholder="e.g. Friend, Coworker" required>
+                </div>
+                <div class="form-group">
+                    <label>AI Goal</label>
+                    <textarea id="goal" rows="3" placeholder="How should the AI talk to them?" required></textarea>
+                </div>
+                <button type="submit">Add Contact</button>
+            </form>
+
+            <h2 style="margin-top: 3rem;">Active Targets</h2>
+            <div id="contacts-list">
+                <!-- Contacts load here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                const badge = document.getElementById('status-badge');
+                const qrContainer = document.getElementById('qr-container');
+
+                if (data.connected) {
+                    badge.className = 'status-badge connected';
+                    badge.innerText = '● WhatsApp Connected';
+                    qrContainer.innerHTML = '<p style="color: var(--success)">Your bot is online and listening for messages!</p>';
+                } else if (data.qr) {
+                    badge.className = 'status-badge disconnected';
+                    badge.innerText = '● Requires Authentication';
+                    qrContainer.innerHTML = `<img src="${data.qr}" alt="Scan QR to login"><p style="font-size:0.8rem; color:var(--text-muted); text-align:center; margin-top:10px;">Scan in WhatsApp > Linked Devices</p>`;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function fetchContacts() {
+            const res = await fetch('/api/contacts');
+            const data = await res.json();
+            const list = document.getElementById('contacts-list');
+            list.innerHTML = '';
+
+            for (const [phone, info] of Object.entries(data)) {
+                const cleanPhone = phone.replace('@c.us', '');
+                list.innerHTML += `
+                    <div class="contact-card">
+                        <div class="contact-info">
+                            <h3>${info.name}</h3>
+                            <p>Phone: +${cleanPhone} | Rel: ${info.relationship}</p>
+                            <p class="goal-text">"${info.goal}"</p>
+                        </div>
+                        <button class="delete-btn" onclick="deleteContact('${phone}')">Remove</button>
+                    </div>
+                `;
+            }
+        }
+
+        async function deleteContact(id) {
+            if(confirm('Are you sure you want to remove this target?')) {
+                await fetch(`/api/contacts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                fetchContacts();
+            }
+        }
+
+        document.getElementById('add-contact-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            let phone = document.getElementById('phone').value.replace(/[^0-9]/g, '');
+            if(!phone.endsWith('@c.us')) phone += '@c.us';
+
+            const payload = {
+                id: phone,
+                name: document.getElementById('name').value,
+                relationship: document.getElementById('relationship').value,
+                goal: document.getElementById('goal').value
+            };
+
+            await fetch('/api/contacts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            e.target.reset();
+            fetchContacts();
+        });
+
+        // Initial load
+        fetchStatus();
+        fetchContacts();
+
+        // Poll status every 5 seconds until connected
+        setInterval(fetchStatus, 5000);
+    </script>
+</body>
+</html>
