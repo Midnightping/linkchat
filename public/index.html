@@ -294,6 +294,10 @@
                     badge.className = 'status-badge disconnected';
                     badge.innerText = '● Requires Authentication';
                     qrContainer.innerHTML = `<img src="${data.qr}" alt="Scan QR to login"><p style="font-size:0.8rem; color:var(--text-muted); text-align:center; margin-top:10px;">Scan in WhatsApp > Linked Devices</p>`;
+                } else {
+                    badge.className = 'status-badge';
+                    badge.innerText = '● Starting up...';
+                    qrContainer.innerHTML = '<p style="color: var(--text-muted)">Please wait, the bot is waking up...</p>';
                 }
             } catch (e) {
                 console.error(e);
